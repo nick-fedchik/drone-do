@@ -1,0 +1,24 @@
+name: Finding
+description: Record an observed defect, limitation, or unexpected result
+labels: ["type:finding"]
+body:
+  - type: textarea
+    id: observation
+    attributes:
+      label: Observation
+      description: What was observed, and under what conditions?
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Link the log, measurement, image, report, or exact location.
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact and suggested follow-up
+    validations:
+      required: true

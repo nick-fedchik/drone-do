@@ -1,0 +1,32 @@
+name: Experiment
+description: Test a hypothesis with a defined method and criteria
+labels: ["type:experiment"]
+body:
+  - type: textarea
+    id: hypothesis
+    attributes:
+      label: Hypothesis
+      description: What result would support or falsify it?
+    validations:
+      required: true
+  - type: textarea
+    id: criteria
+    attributes:
+      label: Success and failure criteria
+      description: Set these before running the experiment.
+    validations:
+      required: true
+  - type: textarea
+    id: method
+    attributes:
+      label: Method and setup
+      description: Equipment, versions, conditions, sample size, and safety controls.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Data and expected Work Product
+      description: What raw data will be preserved and where will the report go?
+    validations:
+      required: true

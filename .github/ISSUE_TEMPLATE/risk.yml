@@ -1,0 +1,24 @@
+name: Risk
+description: Track a possible adverse event and response
+labels: ["type:risk"]
+body:
+  - type: textarea
+    id: event
+    attributes:
+      label: Risk event
+      description: Describe cause, uncertain event, and consequence.
+    validations:
+      required: true
+  - type: textarea
+    id: assessment
+    attributes:
+      label: Likelihood, impact, and evidence
+      description: State the basis; mark unknowns rather than guessing.
+    validations:
+      required: true
+  - type: textarea
+    id: response
+    attributes:
+      label: Mitigation, owner, and review trigger
+    validations:
+      required: true

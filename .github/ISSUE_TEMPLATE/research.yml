@@ -1,0 +1,30 @@
+name: Research question
+description: Investigate an open question or compare evidence
+labels: ["type:research"]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What do we need to learn, and what decision depends on it?
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context and boundaries
+      description: Known facts, assumptions, and what is out of scope.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Useful result
+      description: What report, comparison, or conclusion should be produced?
+    validations:
+      required: true
+  - type: input
+    id: related
+    attributes:
+      label: Related Work Products
+      description: Paths or links to relevant documents.
