@@ -18,6 +18,7 @@ type VideoReport struct {
 	DurationSec   float64 `json:"duration_sec"`
 	Packets       int     `json:"packets"`
 	FramesDecoded int     `json:"frames_decoded"`
+	FramesDropped int     `json:"frames_dropped"`
 	FPS           float64 `json:"fps"`
 	Width         int     `json:"width,omitempty"`
 	Height        int     `json:"height,omitempty"`
@@ -138,13 +139,15 @@ func CaptureVideo(target string, duration time.Duration, outDir string) (VideoRe
 	}
 
 	for _, frame := range ReassembleJPEGs(packets) {
-		cfg, err := jpeg.DecodeConfig(bytes.NewReader(frame))
+		img, err := jpeg.Decode(bytes.NewReader(frame))
 		if err != nil {
+			report.FramesDropped++
 			continue
 		}
+		bounds := img.Bounds()
 		report.FramesDecoded++
-		report.Width = cfg.Width
-		report.Height = cfg.Height
+		report.Width = bounds.Dx()
+		report.Height = bounds.Dy()
 		if outDir != "" {
 			name := filepath.Join(outDir, fmt.Sprintf("frame_%04d.jpg", report.FramesDecoded))
 			if err := os.WriteFile(name, frame, 0o644); err != nil {

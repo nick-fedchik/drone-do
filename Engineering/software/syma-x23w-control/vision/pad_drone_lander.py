@@ -35,24 +35,33 @@ def compute_relative_control(
     kp_xy: float = 1.0,
     kp_yaw: float = 0.5,
     hover_throttle: float = 0.45,
-) -> dict:
-    """Computes normalized controls to steer the detected drone toward the ArUco pad."""
+    max_tilt: float = 0.35,
+    smoothed_err: Optional[Tuple[float, float]] = None,
+    alpha: float = 0.4,
+) -> Tuple[dict, Optional[Tuple[float, float]]]:
+    """Computes clamped, smoothed controls to steer the detected drone toward the ArUco pad."""
     if pad_corners is None or drone_bbox_xywh is None or frame_w <= 0 or frame_h <= 0:
-        return {"throttle": 0.0, "roll": 0.0, "pitch": 0.0, "yaw": 0.0, "aligned": False}
+        return {"throttle": 0.0, "roll": 0.0, "pitch": 0.0, "yaw": 0.0, "aligned": False}, None
 
     pad_center = pad_corners.mean(axis=0)
     drone_cx, drone_cy, _ = bbox_center_and_area(drone_bbox_xywh, frame_w, frame_h)
 
-    err_x = (float(pad_center[0]) - drone_cx) / (frame_w / 2.0)
-    err_y = (drone_cy - float(pad_center[1])) / (frame_h / 2.0)
+    raw_x = (float(pad_center[0]) - drone_cx) / (frame_w / 2.0)
+    raw_y = (drone_cy - float(pad_center[1])) / (frame_h / 2.0)
+    if smoothed_err is not None:
+        err_x = alpha * raw_x + (1.0 - alpha) * smoothed_err[0]
+        err_y = alpha * raw_y + (1.0 - alpha) * smoothed_err[1]
+    else:
+        err_x, err_y = raw_x, raw_y
 
     top_edge = pad_corners[1] - pad_corners[0]
     yaw_rad = math.atan2(float(top_edge[1]), float(top_edge[0]))
     err_yaw = clamp(yaw_rad / math.pi, -1.0, 1.0)
 
-    roll = clamp(kp_xy * err_x, -1.0, 1.0)
-    pitch = clamp(kp_xy * err_y, -1.0, 1.0)
-    yaw = clamp(kp_yaw * err_yaw, -1.0, 1.0)
+    tilt_lim = clamp(max_tilt, 0.0, 1.0)
+    roll = clamp(kp_xy * err_x, -tilt_lim, tilt_lim)
+    pitch = clamp(kp_xy * err_y, -tilt_lim, tilt_lim)
+    yaw = clamp(kp_yaw * err_yaw, -tilt_lim, tilt_lim)
 
     aligned = abs(err_x) < 0.08 and abs(err_y) < 0.08
     throttle = 0.2 if aligned else hover_throttle
@@ -63,7 +72,44 @@ def compute_relative_control(
         "pitch": round(pitch, 3),
         "yaw": round(yaw, 3),
         "aligned": aligned,
-    }
+    }, (err_x, err_y)
+
+
+class FailSafeTracker:
+    """Holds zero tilt briefly on single-frame dropouts and cuts throttle after loss_timeout."""
+
+    def __init__(self, loss_timeout: float = 0.5, hover_throttle: float = 0.45) -> None:
+        self.loss_timeout = loss_timeout
+        self.hover_throttle = hover_throttle
+        self.last_valid_at: Optional[float] = None
+        self.smoothed_err: Optional[Tuple[float, float]] = None
+
+    def step(
+        self,
+        now: float,
+        pad_corners: Optional[np.ndarray],
+        drone_bbox_xywh: Optional[list],
+        frame_w: int,
+        frame_h: int,
+        max_tilt: float = 0.35,
+    ) -> dict:
+        if pad_corners is not None and drone_bbox_xywh is not None:
+            ctrl, self.smoothed_err = compute_relative_control(
+                pad_corners,
+                drone_bbox_xywh,
+                frame_w,
+                frame_h,
+                hover_throttle=self.hover_throttle,
+                max_tilt=max_tilt,
+                smoothed_err=self.smoothed_err,
+            )
+            self.last_valid_at = now
+            return ctrl
+
+        self.smoothed_err = None
+        if self.last_valid_at is not None and (now - self.last_valid_at) <= self.loss_timeout:
+            return {"throttle": self.hover_throttle, "roll": 0.0, "pitch": 0.0, "yaw": 0.0, "aligned": False}
+        return {"throttle": 0.0, "roll": 0.0, "pitch": 0.0, "yaw": 0.0, "aligned": False}
 
 
 def main() -> int:
@@ -76,6 +122,8 @@ def main() -> int:
     parser.add_argument("--marker-id", type=int, default=0, help="ArUco DICT_4X4_50 pad ID")
     parser.add_argument("--target-label", default="", help="optional YOLO class filter (e.g. syma_x23w)")
     parser.add_argument("--conf", type=float, default=0.35, help="YOLO confidence threshold")
+    parser.add_argument("--max-tilt", type=float, default=0.35, help="max roll/pitch/yaw amplitude [0,1]")
+    parser.add_argument("--loss-timeout", type=float, default=0.5, help="seconds before fail-safe cuts throttle")
     parser.add_argument("--frames", type=int, default=0, help="stop after N frames (0 = until Ctrl-C)")
     parser.add_argument("--hz", type=float, default=10.0, help="control loop rate in Hz")
     args = parser.parse_args()
@@ -103,6 +151,7 @@ def main() -> int:
 
     seq = 0
     period = 1.0 / max(1.0, args.hz)
+    tracker = FailSafeTracker(loss_timeout=args.loss_timeout)
     try:
         while args.frames == 0 or seq < args.frames:
             t0 = time.monotonic()
@@ -119,7 +168,7 @@ def main() -> int:
                 dets = [d for d in dets if d["label"] == args.target_label]
             drone_bbox = dets[0]["bbox_xywh"] if dets else None
 
-            ctrl = compute_relative_control(pad_corners, drone_bbox, w, h)
+            ctrl = tracker.step(t0, pad_corners, drone_bbox, w, h, max_tilt=args.max_tilt)
             seq += 1
             resp = send_ipc_command(sock, seq, ctrl)
             print(
