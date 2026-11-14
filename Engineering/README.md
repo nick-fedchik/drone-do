@@ -1,8 +1,8 @@
 # Engineering
 
 * **WP type:** Guide
-* **Version:** 0.3.0
-* **Date:** 2026-11-12
+* **Version:** 0.6.0
+* **Date:** 2026-11-13
 * **Status:** Initial structure; imported specifications remain drafts
 
 ## Specifications
@@ -14,7 +14,9 @@
 The [specification index](specifications/README.md) describes the imported
 documents and evidence labels. The
 [verification plan](validation/verification-plan.md) is a proposed sequence,
-not approval to conduct a flight or charging test.
+not approval to conduct a flight or charging test. Bench results for Jetson
+J501 Wi-Fi, X23W `IC_GPRTPB` video/query, and TensorRT are recorded in
+[Jetson/X23W bench report](validation/jetson-x23w-bench-report.md).
 
 ## Decisions and software
 
@@ -36,6 +38,13 @@ modules or empty folders before there is code to place there.
 Hardware descriptions and designs belong in `Engineering/hardware/` once
 those Work Products exist.
 
+## Software
+
+- [Syma X23W control utility](software/syma-x23w-control/README.md) —
+  Bubble Tea controller/pseudo-drone IPC PoC; X23W protocol remains
+  unverified and live aircraft transport is disabled. See its
+  [tester guide](software/syma-x23w-control/TESTING.md).
+
 ## Version history
 
 | Version | Date | Change |
@@ -43,3 +52,6 @@ those Work Products exist.
 | 0.1.0 | 2026-11-12 | Initial Engineering index. |
 | 0.2.0 | 2026-11-12 | Define technical decision and future software placement. |
 | 0.3.0 | 2026-11-12 | Clarify support for multiple language-independent software modules. |
+| 0.4.0 | 2026-11-12 | Index the offline Syma X23W control utility module. |
+| 0.5.0 | 2026-11-12 | Update the Syma utility index for its local IPC emulator PoC. |
+| 0.6.0 | 2026-11-13 | Note Bubble Tea-based controller and emulator dashboards. |

@@ -1,8 +1,8 @@
 # Work Product register
 
 * **WP type:** Register
-* **Version:** 0.2.0
-* **Date:** 2026-11-12
+* **Version:** 0.5.0
+* **Date:** 2026-11-13
 * **Status:** Initial inventory; imported material is not revalidated.
 
 ## Research
@@ -27,6 +27,8 @@
 | [Sensing and docking](../../Engineering/specifications/sensing-and-docking.md) | Specification | Draft; CapSense and other modalities remain hypotheses. |
 | [Network and control](../../Engineering/specifications/network-and-control.md) | Specification | Draft; X23W protocol is explicitly unverified. |
 | [Verification plan](../../Engineering/validation/verification-plan.md) | Plan | Proposed sequence, not an approved test authorization. |
+| [Jetson/X23W bench report](../../Engineering/validation/jetson-x23w-bench-report.md) | Report / Experiment | Verified Jetson J501 `8188eu` Wi-Fi, X23W `IC_GPRTPB` video/query (`F.WD1B06-20220325-005`), and TensorRT `yolov8n.engine` (`55.7 FPS` end-to-end); flight commands unverified. |
+| [Syma X23W control utility](../../Engineering/software/syma-x23w-control/README.md) | Source Code | Go CLI and Bubble Tea controller/pseudo-drone plus read-only X23W `probe`/`video`; flight commands remain disabled. See its [tester guide](../../Engineering/software/syma-x23w-control/TESTING.md). |
 
 ## Project
 
@@ -46,3 +48,6 @@ or accepted. Update it when adding or retiring a primary Work Product.
 |---|---|---|
 | 0.1.0 | 2026-11-12 | Initial Work Product inventory. |
 | 0.2.0 | 2026-11-12 | Add imported technology notes and concept demonstration. |
+| 0.3.0 | 2026-11-12 | Add the offline Syma X23W control utility scaffold. |
+| 0.4.0 | 2026-11-12 | Update the Syma utility entry for the local controller/emulator PoC. |
+| 0.5.0 | 2026-11-13 | Note the Bubble Tea TUI and emulator dashboard. |
