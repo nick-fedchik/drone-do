@@ -125,6 +125,50 @@ Stop terminal A with Ctrl-C.
 6. Confirm terminal A shows the final neutral frame, then press `q` to stop
    the emulator.
 
+## ArUco landing tracker (Jetson + Logitech C615 -> `droneemu`)
+
+1. Run the unit test on Jetson (uses OpenCV 4.8 `cv2.aruco`):
+
+   ```sh
+   python3 -m unittest discover -s vision -p "test_*.py"
+   ```
+
+2. Generate a printable `DICT_4X4_50` marker (ID `0`):
+
+   ```sh
+   python3 vision/aruco_lander.py --generate-marker /tmp/aruco_0.png
+   ```
+
+3. Start `droneemu tui` in terminal A and the tracker in terminal B:
+
+   ```sh
+   python3 vision/aruco_lander.py --camera 0 --hz 10
+   ```
+
+   Pointing the camera at the printed/displayed marker updates `roll`, `pitch`,
+   `yaw`, and `throttle` in the `droneemu` dashboard over the local Unix socket.
+
+## YOLOv8n training (AORUS5) and TensorRT inference (Jetson)
+
+1. On **Jetson**, capture dataset frames from Logitech C615:
+
+   ```sh
+   python3 vision/capture_dataset.py --camera 0 --interval 0.5 --count 200 --out ~/dataset/images
+   ```
+
+2. Label the `syma_x23w` class in YOLO format and fine-tune on **AORUS5** (RTX 3070):
+
+   ```sh
+   ~/.venvs/drone-yolo/bin/python vision/train_yolo.py --data /path/to/data.yaml --out-onnx syma_x23w.onnx
+   ```
+
+3. On **Jetson**, compile the FP16 TensorRT engine and run `trt_detector.py`:
+
+   ```sh
+   /usr/src/tensorrt/bin/trtexec --onnx=syma_x23w.onnx --saveEngine=$HOME/models/syma_x23w.engine --fp16
+   python3 vision/trt_detector.py --engine $HOME/models/syma_x23w.engine --camera 0 --frames 10
+   ```
+
 ## Troubleshooting
 
 - If the client reports that it cannot connect, confirm the emulator is still
