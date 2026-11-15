@@ -27,7 +27,8 @@
 | [Sensing and docking](../../Engineering/specifications/sensing-and-docking.md) | Specification | Draft; CapSense and other modalities remain hypotheses. |
 | [Network and control](../../Engineering/specifications/network-and-control.md) | Specification | Draft; X23W protocol is explicitly unverified. |
 | [Verification plan](../../Engineering/validation/verification-plan.md) | Plan | Proposed sequence, not an approved test authorization. |
-| [Jetson/X23W bench report](../../Engineering/validation/jetson-x23w-bench-report.md) | Report / Experiment | Verified Jetson J501 `8188eu` Wi-Fi, X23W `IC_GPRTPB` video/query (`F.WD1B06-20220325-005`), and TensorRT `yolov8n.engine` (`55.7 FPS` end-to-end); flight commands unverified. |
+| [Jetson/X23W bench report](../../Engineering/validation/jetson-x23w-bench-report.md) | Report / Experiment | Verified Jetson J501 `8188eu` Wi-Fi, X23W `IC_GPRTPB` video/motor bridge (`F.WD1B06-20220325-005`), and retrained `syma_x23w.engine` (`0/60` hard-negative FP, `2.79 ms` GPU). |
+| [Pre-flight checklist](../../Engineering/validation/pre-flight-checklist.md) | Plan | Safety and axis-polarity checks before installing propellers for hover/landing tests. |
 | [Syma X23W control utility](../../Engineering/software/syma-x23w-control/README.md) | Source Code | Go CLI and Bubble Tea controller/pseudo-drone plus read-only X23W `probe`/`video`; flight commands remain disabled. See its [tester guide](../../Engineering/software/syma-x23w-control/TESTING.md). |
 
 ## Project

@@ -16,7 +16,8 @@ documents and evidence labels. The
 [verification plan](validation/verification-plan.md) is a proposed sequence,
 not approval to conduct a flight or charging test. Bench results for Jetson
 J501 Wi-Fi, X23W `IC_GPRTPB` video/query, and TensorRT are recorded in
-[Jetson/X23W bench report](validation/jetson-x23w-bench-report.md).
+[Jetson/X23W bench report](validation/jetson-x23w-bench-report.md); see
+[pre-flight checklist](validation/pre-flight-checklist.md) before blades-on tests.
 
 ## Decisions and software
 

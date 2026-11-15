@@ -36,10 +36,14 @@ def compute_relative_control(
     frame_h: int,
     kp_xy: float = 1.0,
     kp_yaw: float = 0.5,
-    hover_throttle: float = 0.45,
+    hover_throttle: float = 0.5,
+    descent_throttle: float = 0.35,
     max_tilt: float = 0.35,
     smoothed_err: Optional[Tuple[float, float]] = None,
     alpha: float = 0.4,
+    invert_roll: bool = False,
+    invert_pitch: bool = False,
+    invert_yaw: bool = False,
 ) -> Tuple[dict, Optional[Tuple[float, float]]]:
     """Computes clamped, smoothed controls to steer the detected drone toward the ArUco pad."""
     if pad_corners is None or drone_bbox_xywh is None or frame_w <= 0 or frame_h <= 0:
@@ -61,12 +65,12 @@ def compute_relative_control(
     err_yaw = clamp(yaw_rad / math.pi, -1.0, 1.0)
 
     tilt_lim = clamp(max_tilt, 0.0, 1.0)
-    roll = clamp(kp_xy * err_x, -tilt_lim, tilt_lim)
-    pitch = clamp(kp_xy * err_y, -tilt_lim, tilt_lim)
-    yaw = clamp(kp_yaw * err_yaw, -tilt_lim, tilt_lim)
+    roll = clamp((-1.0 if invert_roll else 1.0) * kp_xy * err_x, -tilt_lim, tilt_lim)
+    pitch = clamp((-1.0 if invert_pitch else 1.0) * kp_xy * err_y, -tilt_lim, tilt_lim)
+    yaw = clamp((-1.0 if invert_yaw else 1.0) * kp_yaw * err_yaw, -tilt_lim, tilt_lim)
 
-    aligned = abs(err_x) < 0.08 and abs(err_y) < 0.08
-    throttle = 0.2 if aligned else hover_throttle
+    aligned = abs(err_x) < 0.10 and abs(err_y) < 0.10
+    throttle = descent_throttle if aligned else hover_throttle
 
     return {
         "throttle": round(throttle, 3),
@@ -78,11 +82,21 @@ def compute_relative_control(
 
 
 class FailSafeTracker:
-    """Holds zero tilt briefly on single-frame dropouts and cuts throttle after loss_timeout."""
+    """Tracks alignment phase (SEARCHING/ALIGNING/DESCENDING) and cuts throttle on timeout."""
 
-    def __init__(self, loss_timeout: float = 0.5, hover_throttle: float = 0.45) -> None:
+    def __init__(
+        self,
+        loss_timeout: float = 0.25,
+        hover_throttle: float = 0.5,
+        descent_throttle: float = 0.35,
+        align_frames: int = 3,
+    ) -> None:
         self.loss_timeout = loss_timeout
         self.hover_throttle = hover_throttle
+        self.descent_throttle = descent_throttle
+        self.align_frames = max(1, align_frames)
+        self.align_streak = 0
+        self.phase = "SEARCHING"
         self.last_valid_at: Optional[float] = None
         self.smoothed_err: Optional[Tuple[float, float]] = None
 
@@ -94,6 +108,9 @@ class FailSafeTracker:
         frame_w: int,
         frame_h: int,
         max_tilt: float = 0.35,
+        invert_roll: bool = False,
+        invert_pitch: bool = False,
+        invert_yaw: bool = False,
     ) -> dict:
         if pad_corners is not None and drone_bbox_xywh is not None:
             ctrl, self.smoothed_err = compute_relative_control(
@@ -102,16 +119,34 @@ class FailSafeTracker:
                 frame_w,
                 frame_h,
                 hover_throttle=self.hover_throttle,
+                descent_throttle=self.descent_throttle,
                 max_tilt=max_tilt,
                 smoothed_err=self.smoothed_err,
+                invert_roll=invert_roll,
+                invert_pitch=invert_pitch,
+                invert_yaw=invert_yaw,
             )
             self.last_valid_at = now
+            if ctrl["aligned"]:
+                self.align_streak += 1
+            else:
+                self.align_streak = 0
+            if self.align_streak >= self.align_frames:
+                self.phase = "DESCENDING"
+                ctrl["throttle"] = round(self.descent_throttle, 3)
+            else:
+                self.phase = "ALIGNING"
+                ctrl["throttle"] = round(self.hover_throttle, 3)
+            ctrl["phase"] = self.phase
             return ctrl
 
         self.smoothed_err = None
+        self.align_streak = 0
         if self.last_valid_at is not None and (now - self.last_valid_at) <= self.loss_timeout:
-            return {"throttle": self.hover_throttle, "roll": 0.0, "pitch": 0.0, "yaw": 0.0, "aligned": False}
-        return {"throttle": 0.0, "roll": 0.0, "pitch": 0.0, "yaw": 0.0, "aligned": False}
+            self.phase = "HOLD_LOSS"
+            return {"throttle": self.hover_throttle, "roll": 0.0, "pitch": 0.0, "yaw": 0.0, "aligned": False, "phase": self.phase}
+        self.phase = "SEARCHING"
+        return {"throttle": 0.0, "roll": 0.0, "pitch": 0.0, "yaw": 0.0, "aligned": False, "phase": self.phase}
 
 
 def main() -> int:
@@ -126,7 +161,11 @@ def main() -> int:
     parser.add_argument("--conf", type=float, default=0.55, help="YOLO confidence threshold")
     parser.add_argument("--max-tilt", type=float, default=0.35, help="max roll/pitch/yaw amplitude [0,1]")
     parser.add_argument("--hover-throttle", type=float, default=0.5, help="neutral hover throttle [0,1] (0.5 -> 0x80)")
-    parser.add_argument("--loss-timeout", type=float, default=0.5, help="seconds before fail-safe cuts throttle")
+    parser.add_argument("--descent-throttle", type=float, default=0.35, help="gentle descent throttle when aligned")
+    parser.add_argument("--loss-timeout", type=float, default=0.25, help="seconds before fail-safe cuts throttle")
+    parser.add_argument("--invert-roll", action="store_true", help="invert roll sign")
+    parser.add_argument("--invert-pitch", action="store_true", help="invert pitch sign")
+    parser.add_argument("--invert-yaw", action="store_true", help="invert yaw sign")
     parser.add_argument("--frames", type=int, default=0, help="stop after N frames (0 = until Ctrl-C)")
     parser.add_argument("--hz", type=float, default=10.0, help="control loop rate in Hz")
     parser.add_argument("--status-file", default="", help="optional JSON status file updated every frame")
@@ -166,7 +205,11 @@ def main() -> int:
 
     seq = 0
     period = 1.0 / max(1.0, args.hz)
-    tracker = FailSafeTracker(loss_timeout=args.loss_timeout, hover_throttle=args.hover_throttle)
+    tracker = FailSafeTracker(
+        loss_timeout=args.loss_timeout,
+        hover_throttle=args.hover_throttle,
+        descent_throttle=args.descent_throttle,
+    )
     try:
         while args.frames == 0 or seq < args.frames:
             t0 = time.monotonic()
@@ -184,7 +227,17 @@ def main() -> int:
             drone_bbox = dets[0]["bbox_xywh"] if dets else None
             drone_conf = dets[0]["confidence"] if dets else 0.0
 
-            ctrl = tracker.step(t0, pad_corners, drone_bbox, w, h, max_tilt=args.max_tilt)
+            ctrl = tracker.step(
+                t0,
+                pad_corners,
+                drone_bbox,
+                w,
+                h,
+                max_tilt=args.max_tilt,
+                invert_roll=args.invert_roll,
+                invert_pitch=args.invert_pitch,
+                invert_yaw=args.invert_yaw,
+            )
             seq += 1
             resp = send_ipc_command(sock, seq, ctrl)
             if args.status_file:

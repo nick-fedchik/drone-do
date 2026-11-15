@@ -207,6 +207,7 @@ func runBridge(args []string, stdout, stderr io.Writer) int {
 	armLive := flags.Bool("arm-live", false, "explicitly enable live UDP 25000 flight packets (default: dry-run)")
 	watchdog := flags.Duration("watchdog", 500*time.Millisecond, "IPC watchdog timeout before sending FlagStop")
 	maxTilt := flags.Float64("max-tilt", 0.35, "max roll/pitch/yaw amplitude [0,1]")
+	stopMode := flags.String("stop-mode", "stop", "stop packet mode on timeout/zero throttle: stop|land|zero")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
@@ -244,6 +245,7 @@ func runBridge(args []string, stdout, stderr io.Writer) int {
 		Watchdog:   *watchdog,
 		MaxTilt:    *maxTilt,
 		SocketPath: path,
+		StopMode:   *stopMode,
 	})
 	stop()
 	serveErr := <-serveDone
@@ -336,6 +338,6 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  dronectl tui [--socket PATH]")
 	fmt.Fprintln(w, "  dronectl probe [--target IP] [--duration 2s]")
 	fmt.Fprintln(w, "  dronectl video [--target IP] [--duration 3s] [--out DIR]")
-	fmt.Fprintln(w, "  dronectl bridge [--socket PATH] [--target IP] [--arm-live] [--watchdog 500ms] [--max-tilt 0.35]")
+	fmt.Fprintln(w, "  dronectl bridge [--socket PATH] [--target IP] [--arm-live] [--watchdog 500ms] [--max-tilt 0.35] [--stop-mode stop|land|zero]")
 	fmt.Fprintln(w, "status/send/tui use the local pseudo-emulator; bridge defaults to dry-run unless --arm-live is set.")
 }

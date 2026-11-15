@@ -15,13 +15,21 @@ func TestPacketFromSnapshotWatchdogTriggersStop(t *testing.T) {
 		UpdatedAt: &stale,
 		LastFrame: &control.Frame{At: stale, Throttle: 0.6, Roll: 0.9},
 	}
-	pkt, err := PacketFromSnapshot(snap, time.Now().UTC(), 500*time.Millisecond, 0.35)
+	pkt, err := PacketFromSnapshot(snap, time.Now().UTC(), 500*time.Millisecond, 0.35, "stop")
 	if err != nil {
 		t.Fatal(err)
 	}
 	// FlagStop sets throttle=0 (pkt[3]=0) and cmd[8] (pkt[11]) to 0x10
 	if pkt[3] != 0 || pkt[11] != 0x10 {
 		t.Fatalf("stale snapshot throttle=%d flag=0x%02x, want throttle=0 flag=0x10", pkt[3], pkt[11])
+	}
+
+	landPkt, err := PacketFromSnapshot(snap, time.Now().UTC(), 500*time.Millisecond, 0.35, "land")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if landPkt[3] != 0 || landPkt[11] != 0x08 {
+		t.Fatalf("land stop mode throttle=%d flag=0x%02x, want throttle=0 flag=0x08", landPkt[3], landPkt[11])
 	}
 }
 
@@ -32,7 +40,7 @@ func TestPacketFromSnapshotClampsTilt(t *testing.T) {
 		UpdatedAt: &now,
 		LastFrame: &control.Frame{At: now, Throttle: 0.5, Roll: 0.9, Pitch: -0.8},
 	}
-	pkt, err := PacketFromSnapshot(snap, now, 500*time.Millisecond, 0.35)
+	pkt, err := PacketFromSnapshot(snap, now, 500*time.Millisecond, 0.35, "stop")
 	if err != nil {
 		t.Fatal(err)
 	}
