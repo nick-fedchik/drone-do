@@ -8,15 +8,20 @@ import (
 )
 
 const (
-	// FlightUDPPort is the Joyhonest IC_GPRTPB flight-command UDP port from jh_wifi.cpp.
+	// FlightUDPPort is the verified Joyhonest IC_GPRTPB flight-command UDP port.
 	FlightUDPPort = 25000
 	innerLen      = 10
 	packetLen     = 15
+
+	FlagTakeoff   uint8 = 0x01 // cmd[7] |= 0x40 (bUp)
+	FlagLand      uint8 = 0x02 // cmd[8] |= 0x08 (bDn)
+	FlagStop      uint8 = 0x04 // cmd[8] |= 0x10 (bStop)
+	FlagCalibrate uint8 = 0x08 // cmd[8] |= 0x20 (bAdj)
 )
 
-// EncodeFlightFrame converts a normalized control.Frame into a 15-byte
-// Joyhonest IC_GPRTPB 0xA5 0x5A packet (for future bench verification; not sent here).
-func EncodeFlightFrame(frame control.Frame) ([]byte, error) {
+// EncodeFlightFrame converts a normalized control.Frame into the verified 15-byte
+// Syma X23W (IC_GPRTPB 0xA5 0x5A + 10-byte Syma payload) packet for UDP 25000.
+func EncodeFlightFrame(frame control.Frame, flags uint8) ([]byte, error) {
 	if err := frame.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid frame: %w", err)
 	}
@@ -27,10 +32,22 @@ func EncodeFlightFrame(frame control.Frame) ([]byte, error) {
 	inner[2] = signedAxisByte(frame.Yaw)
 	inner[3] = signedAxisByte(frame.Roll)
 	inner[4] = 0x20
-	inner[5] = 0x20
+	inner[5] = 0x40
 	inner[6] = 0x20
 	inner[7] = 0x20
+	if flags&FlagTakeoff != 0 {
+		inner[7] |= 0x40
+	}
 	inner[8] = 0x00
+	if flags&FlagLand != 0 {
+		inner[8] |= 0x08
+	}
+	if flags&FlagStop != 0 {
+		inner[8] |= 0x10
+	}
+	if flags&FlagCalibrate != 0 {
+		inner[8] |= 0x20
+	}
 
 	var xor uint8
 	for i := 0; i < 9; i++ {
