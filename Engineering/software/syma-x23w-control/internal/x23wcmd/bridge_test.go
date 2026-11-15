@@ -19,9 +19,9 @@ func TestPacketFromSnapshotWatchdogTriggersStop(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// FlagStop sets cmd[8] (pkt[11]) to 0x10
-	if pkt[11] != 0x10 {
-		t.Fatalf("stale snapshot flag byte = 0x%02x, want 0x10 (FlagStop)", pkt[11])
+	// FlagStop sets throttle=0 (pkt[3]=0) and cmd[8] (pkt[11]) to 0x10
+	if pkt[3] != 0 || pkt[11] != 0x10 {
+		t.Fatalf("stale snapshot throttle=%d flag=0x%02x, want throttle=0 flag=0x10", pkt[3], pkt[11])
 	}
 }
 

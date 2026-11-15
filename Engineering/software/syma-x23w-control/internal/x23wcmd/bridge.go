@@ -76,7 +76,7 @@ func RunBridge(ctx context.Context, server *ipc.Server, cfg BridgeConfig) error 
 		select {
 		case <-ctx.Done():
 			if cfg.ArmLive && cmdConn != nil && ctrlConn != nil {
-				stopPkt, err := EncodeFlightFrame(control.Frame{At: time.Now().UTC(), Throttle: 0.5}, FlagStop)
+				stopPkt, err := EncodeFlightFrame(control.Frame{At: time.Now().UTC(), Throttle: 0.0}, FlagStop)
 				if err == nil {
 					for range 5 {
 						_, _ = cmdConn.WriteToUDP(stopPkt, cmdAddr)
@@ -105,7 +105,7 @@ func RunBridge(ctx context.Context, server *ipc.Server, cfg BridgeConfig) error 
 // PacketFromSnapshot applies watchdog timeout and tilt clamping to an IPC snapshot.
 func PacketFromSnapshot(snap ipc.Snapshot, now time.Time, watchdog time.Duration, maxTilt float64) ([]byte, error) {
 	if snap.LastFrame == nil || snap.UpdatedAt == nil || now.Sub(*snap.UpdatedAt) > watchdog {
-		return EncodeFlightFrame(control.Frame{At: now, Throttle: 0.5}, FlagStop)
+		return EncodeFlightFrame(control.Frame{At: now, Throttle: 0.0}, FlagStop)
 	}
 	f := *snap.LastFrame
 	f.At = now
@@ -113,7 +113,7 @@ func PacketFromSnapshot(snap ipc.Snapshot, now time.Time, watchdog time.Duration
 	f.Pitch = clampAxis(f.Pitch, maxTilt)
 	f.Yaw = clampAxis(f.Yaw, maxTilt)
 	if f.Throttle <= 0.001 {
-		return EncodeFlightFrame(control.Frame{At: now, Throttle: 0.5}, FlagStop)
+		return EncodeFlightFrame(control.Frame{At: now, Throttle: 0.0}, FlagStop)
 	}
 	return EncodeFlightFrame(f, 0)
 }
