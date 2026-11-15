@@ -133,10 +133,10 @@ Stop terminal A with Ctrl-C.
    python3 -m unittest discover -s vision -p "test_*.py"
    ```
 
-2. Generate a printable `DICT_4X4_50` marker (ID `0`):
+2. Generate a printable `DICT_4X4_50` marker (ID `0`) inside `assets/`:
 
    ```sh
-   python3 vision/aruco_lander.py --generate-marker /tmp/aruco_0.png
+   python3 vision/aruco_lander.py --generate-marker assets/aruco_0.png
    ```
 
 3. Start `droneemu tui` in terminal A and the tracker in terminal B:
@@ -147,6 +147,7 @@ Stop terminal A with Ctrl-C.
 
    Pointing the camera at the printed/displayed marker updates `roll`, `pitch`,
    `yaw`, and `throttle` in the `droneemu` dashboard over the local Unix socket.
+   See `assets/aruco_0.png` for the generated marker.
 
 ## YOLOv8n training (AORUS5) and TensorRT inference (Jetson)
 

@@ -121,7 +121,7 @@ def main() -> int:
     parser.add_argument("--camera", type=int, default=0, help="V4L2 camera index (default: 0)")
     parser.add_argument("--marker-id", type=int, default=0, help="ArUco DICT_4X4_50 pad ID")
     parser.add_argument("--target-label", default="", help="optional YOLO class filter (e.g. syma_x23w)")
-    parser.add_argument("--conf", type=float, default=0.35, help="YOLO confidence threshold")
+    parser.add_argument("--conf", type=float, default=0.55, help="YOLO confidence threshold")
     parser.add_argument("--max-tilt", type=float, default=0.35, help="max roll/pitch/yaw amplitude [0,1]")
     parser.add_argument("--loss-timeout", type=float, default=0.5, help="seconds before fail-safe cuts throttle")
     parser.add_argument("--frames", type=int, default=0, help="stop after N frames (0 = until Ctrl-C)")
