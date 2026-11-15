@@ -6,10 +6,12 @@ commands to droneemu over local Unix IPC.
 """
 
 import argparse
+import json
 import math
 import os
 import socket
 import sys
+import threading
 import time
 from typing import Optional, Tuple
 
@@ -126,6 +128,8 @@ def main() -> int:
     parser.add_argument("--loss-timeout", type=float, default=0.5, help="seconds before fail-safe cuts throttle")
     parser.add_argument("--frames", type=int, default=0, help="stop after N frames (0 = until Ctrl-C)")
     parser.add_argument("--hz", type=float, default=10.0, help="control loop rate in Hz")
+    parser.add_argument("--status-file", default="", help="optional JSON status file updated every frame")
+    parser.add_argument("--preview-port", type=int, default=0, help="optional HTTP MJPEG preview port (e.g. 8081)")
     args = parser.parse_args()
 
     detector = TrtYoloDetector(args.engine)
@@ -149,6 +153,16 @@ def main() -> int:
         print(f"Connect to emulator socket {args.socket}: {exc}", file=sys.stderr)
         return 1
 
+    preview_buf = None
+    preview_server = None
+    if args.preview_port > 0:
+        from http.server import ThreadingHTTPServer
+        from stream_preview import FrameBuffer, make_handler
+        preview_buf = FrameBuffer()
+        preview_server = ThreadingHTTPServer(("0.0.0.0", args.preview_port), make_handler(preview_buf))
+        threading.Thread(target=preview_server.serve_forever, daemon=True).start()
+        print(f"MJPEG preview ready at http://jetson:{args.preview_port}/stream.mjpg", flush=True)
+
     seq = 0
     period = 1.0 / max(1.0, args.hz)
     tracker = FailSafeTracker(loss_timeout=args.loss_timeout)
@@ -167,10 +181,37 @@ def main() -> int:
             if args.target_label:
                 dets = [d for d in dets if d["label"] == args.target_label]
             drone_bbox = dets[0]["bbox_xywh"] if dets else None
+            drone_conf = dets[0]["confidence"] if dets else 0.0
 
             ctrl = tracker.step(t0, pad_corners, drone_bbox, w, h, max_tilt=args.max_tilt)
             seq += 1
             resp = send_ipc_command(sock, seq, ctrl)
+            if args.status_file:
+                status_payload = {
+                    "seq": seq,
+                    "pad": pad_det is not None,
+                    "drone": drone_bbox is not None,
+                    "drone_conf": drone_conf,
+                    "ctrl": ctrl,
+                    "emu_cmds": resp["snapshot"]["commands_received"],
+                }
+                tmp_path = args.status_file + ".tmp"
+                with open(tmp_path, "w", encoding="utf-8") as sf:
+                    json.dump(status_payload, sf)
+                os.replace(tmp_path, args.status_file)
+            if preview_buf is not None:
+                if pad_corners is not None:
+                    pts = pad_corners.astype(int).reshape((-1, 1, 2))
+                    cv2.polylines(frame, [pts], True, (255, 200, 0), 2)
+                    cv2.putText(frame, f"Pad {pad_det[0]}", tuple(pts[0][0]), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 200, 0), 2)
+                if drone_bbox is not None:
+                    x, y, bw, bh = [int(v) for v in drone_bbox]
+                    cv2.rectangle(frame, (x, y), (x + bw, y + bh), (0, 255, 0), 2)
+                    cv2.putText(frame, f"syma_x23w {drone_conf:.2f}", (x, max(20, y - 8)),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                ok, enc = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+                if ok:
+                    preview_buf.set(enc.tobytes())
             print(
                 f"seq={seq} pad={pad_det is not None} drone={drone_bbox is not None} "
                 f"thr={ctrl['throttle']:.2f} roll={ctrl['roll']:+.2f} "
@@ -182,6 +223,8 @@ def main() -> int:
     except KeyboardInterrupt:
         pass
     finally:
+        if preview_server is not None:
+            preview_server.server_close()
         cap.release()
         detector.close()
         sock.close()
