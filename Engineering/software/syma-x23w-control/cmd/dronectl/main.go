@@ -1,17 +1,21 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/nick-fedchik/drone-do/Engineering/software/syma-x23w-control/internal/control"
 	"github.com/nick-fedchik/drone-do/Engineering/software/syma-x23w-control/internal/ipc"
 	"github.com/nick-fedchik/drone-do/Engineering/software/syma-x23w-control/internal/sequence"
 	"github.com/nick-fedchik/drone-do/Engineering/software/syma-x23w-control/internal/tui"
+	"github.com/nick-fedchik/drone-do/Engineering/software/syma-x23w-control/internal/x23wcmd"
 	"github.com/nick-fedchik/drone-do/Engineering/software/syma-x23w-control/internal/x23wprobe"
 )
 
@@ -46,6 +50,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return probeWiFi(args[1:], stdout, stderr)
 	case "video":
 		return captureVideo(args[1:], stdout, stderr)
+	case "bridge":
+		return runBridge(args[1:], stdout, stderr)
 	default:
 		printUsage(stderr)
 		return 2
@@ -193,6 +199,65 @@ func probeWiFi(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
+func runBridge(args []string, stdout, stderr io.Writer) int {
+	flags := flag.NewFlagSet("bridge", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	socketPath := flags.String("socket", "", "path to local IPC Unix socket")
+	target := flags.String("target", x23wprobe.DefaultTargetIP, "drone Wi-Fi IP address")
+	armLive := flags.Bool("arm-live", false, "explicitly enable live UDP 25000 flight packets (default: dry-run)")
+	watchdog := flags.Duration("watchdog", 500*time.Millisecond, "IPC watchdog timeout before sending FlagStop")
+	maxTilt := flags.Float64("max-tilt", 0.35, "max roll/pitch/yaw amplitude [0,1]")
+	if err := flags.Parse(args); err != nil {
+		return 2
+	}
+	if flags.NArg() != 0 {
+		fmt.Fprintln(stderr, "bridge accepts only flags")
+		return 2
+	}
+	path, err := resolveSocketPath(*socketPath)
+	if err != nil {
+		fmt.Fprintf(stderr, "resolve socket path: %v\n", err)
+		return 1
+	}
+	server, err := ipc.Listen(path)
+	if err != nil {
+		fmt.Fprintf(stderr, "listen IPC socket: %v\n", err)
+		return 1
+	}
+	defer server.Close()
+
+	mode := "DRY-RUN (no UDP flight packets sent)"
+	if *armLive {
+		mode = fmt.Sprintf("ARMED LIVE -> %s:%d (20 Hz, watchdog=%s, max_tilt=%.2f)", *target, x23wcmd.FlightUDPPort, *watchdog, *maxTilt)
+	}
+	fmt.Fprintf(stdout, "dronectl bridge listening on %s | mode: %s\n", path, mode)
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	serveDone := make(chan error, 1)
+	go func() { serveDone <- server.Serve(ctx) }()
+
+	bridgeErr := x23wcmd.RunBridge(ctx, server, x23wcmd.BridgeConfig{
+		TargetIP:   *target,
+		ArmLive:    *armLive,
+		Watchdog:   *watchdog,
+		MaxTilt:    *maxTilt,
+		SocketPath: path,
+	})
+	stop()
+	serveErr := <-serveDone
+	if bridgeErr != nil {
+		fmt.Fprintf(stderr, "bridge error: %v\n", bridgeErr)
+		return 1
+	}
+	if serveErr != nil {
+		fmt.Fprintf(stderr, "IPC server error: %v\n", serveErr)
+		return 1
+	}
+	return 0
+}
+
 func captureVideo(args []string, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("video", flag.ContinueOnError)
 	flags.SetOutput(stderr)
@@ -271,5 +336,6 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  dronectl tui [--socket PATH]")
 	fmt.Fprintln(w, "  dronectl probe [--target IP] [--duration 2s]")
 	fmt.Fprintln(w, "  dronectl video [--target IP] [--duration 3s] [--out DIR]")
-	fmt.Fprintln(w, "status/send/tui use the local pseudo-emulator; probe/video use read-only Wi-Fi queries.")
+	fmt.Fprintln(w, "  dronectl bridge [--socket PATH] [--target IP] [--arm-live] [--watchdog 500ms] [--max-tilt 0.35]")
+	fmt.Fprintln(w, "status/send/tui use the local pseudo-emulator; bridge defaults to dry-run unless --arm-live is set.")
 }

@@ -170,6 +170,24 @@ Stop terminal A with Ctrl-C.
    python3 vision/trt_detector.py --engine $HOME/models/syma_x23w.engine --camera 0 --frames 10
    ```
 
+## Live flight bridge (`dronectl bridge`)
+
+`dronectl bridge` listens on the same local Unix IPC socket as `droneemu`,
+so `dronectl tui` or `vision/pad_drone_lander.py` can drive it directly.
+
+- By default it runs in **dry-run** mode (no UDP packets sent).
+- Passing `--arm-live` sends `JHCMD` on UDP `20000` and 20 Hz `0xA5 0x5A`
+  packets to `192.168.29.1:25000`, clamping tilt to `--max-tilt` (0.35) and
+  sending `FlagStop` (`bStop`) if IPC updates stop for `--watchdog` (500 ms)
+  or on `Ctrl-C`.
+
+```sh
+# Dry-run test:
+./dronectl bridge
+# Armed bench/flight bridge (ensure physical RC transmitter is OFF):
+./dronectl bridge --arm-live --max-tilt 0.35 --watchdog 500ms
+```
+
 ## Troubleshooting
 
 - If the client reports that it cannot connect, confirm the emulator is still

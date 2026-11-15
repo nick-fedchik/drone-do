@@ -125,6 +125,7 @@ def main() -> int:
     parser.add_argument("--target-label", default="", help="optional YOLO class filter (e.g. syma_x23w)")
     parser.add_argument("--conf", type=float, default=0.55, help="YOLO confidence threshold")
     parser.add_argument("--max-tilt", type=float, default=0.35, help="max roll/pitch/yaw amplitude [0,1]")
+    parser.add_argument("--hover-throttle", type=float, default=0.5, help="neutral hover throttle [0,1] (0.5 -> 0x80)")
     parser.add_argument("--loss-timeout", type=float, default=0.5, help="seconds before fail-safe cuts throttle")
     parser.add_argument("--frames", type=int, default=0, help="stop after N frames (0 = until Ctrl-C)")
     parser.add_argument("--hz", type=float, default=10.0, help="control loop rate in Hz")
@@ -165,7 +166,7 @@ def main() -> int:
 
     seq = 0
     period = 1.0 / max(1.0, args.hz)
-    tracker = FailSafeTracker(loss_timeout=args.loss_timeout)
+    tracker = FailSafeTracker(loss_timeout=args.loss_timeout, hover_throttle=args.hover_throttle)
     try:
         while args.frames == 0 or seq < args.frames:
             t0 = time.monotonic()
