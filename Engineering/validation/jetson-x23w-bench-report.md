@@ -60,6 +60,23 @@ Excluded: live motor/flight-command testing on UDP `25000` (propellers remained 
 | `dronectl bridge --arm-live` (`UDP 25000`, blades OFF) | Solid LED bind at 20 Hz; `bUp` spins motors; `FlagStop` + `throttle=0` stops motors after ~3–5 s controller ramp-down | Stop-mode measured 2026-11-16: ramp-down 8 s (`zero`/`land`) vs 4.5–5 s (`--end-pulse stop`); blades-on 2026-11-16: throttle `0.6`/`0.75` no lift-off, `0.9` for 1.5 s climbs ~1 m then falls straight; hover throttle lies in `0.75–0.9`; axis polarity in flight still unverified |
 | End-to-end Python TRT + `cv2` | `48` frames in `0.861 s` (`55.7 FPS` incl. JPEG decode + NMS) | `0` COCO detections > `0.35` on bench-facing frames |
 
+## Open-loop flight trim tests (2026-11-16)
+
+Profile: `throttle 0.9` × 0.5 s, then `0.82` × 3 s, constant `roll`; drone faces the webcam. Hover throttle ≈ `0.82–0.85`.
+
+| `roll` | Observed drift (drone frame) |
+|---|---|
+| 0 | right, into desk |
+| +0.1 | right, into desk |
+| −0.03 | left, into wall (rise ~0.5 m) |
+| −0.06 | left, into wall (low rise) |
+| −0.15 | left, wall impact, flipped |
+
+- `roll −` moves the drone left, `roll +` right (polarity confirmed).
+- Neutral trim is not stable: a ±0.03 change flips drift direction. Open-loop trimming is not viable without position feedback.
+- The detector loses the drone shortly after lift-off in these flights, so no usable track exists; closed-loop control needs reliable in-flight detection, a tether/cage and `--hover-throttle 0.82`.
+- 360° yaw maneuvers deferred until drift is controlled; yaw rate is uncalibrated.
+
 ## Conclusion and limitations
 
 1. **Jetson + Go + TensorRT pipeline is viable:** Jetson AGX Orin connects directly to `FPV_WIFI__140e` (`192.168.29.1`) over `TL-WN722N`, decodes live `640x480 @ 16 FPS` MJPEG in Go, and runs FP16 YOLOv8n inference at `55.7 FPS` end-to-end (>3x headroom over camera frame rate).
