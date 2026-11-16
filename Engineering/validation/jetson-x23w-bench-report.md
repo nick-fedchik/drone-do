@@ -57,7 +57,7 @@ Excluded: live motor/flight-command testing on UDP `25000` (propellers remained 
 | `dronectl video` (`UDP 10900`) | `645` UDP packets in `3 s`; `48` frames (`16 FPS`, `640x480`, `12–19 KB`/frame) | `jpeg.DecodeConfig` accepted 48 headers; `cv2.imread` reported `premature end of data segment` on 7 frames (full `jpeg.Decode` validation needed) |
 | `trtexec --fp16` (`yolov8n.engine`) | `339.5 qps`, mean GPU compute `2.94 ms`, host latency `3.35 ms` | Engine size `8.8 MB` on AGX Orin 64GB |
 | Retrained `syma_x23w.engine` (white Blender + real + hard-negatives) | `2.79 ms` GPU compute; `54/80` real drone hits (`conf >= 0.55`), **`0/60` false positives** on `PYNQ-Z1`/desk | Eliminated `8/60` baseline false positives |
-| `dronectl bridge --arm-live` (`UDP 25000`, blades OFF) | Solid LED bind at 20 Hz; `bUp` spins motors; `FlagStop` + `throttle=0` stops motors after ~3–5 s controller ramp-down | Stop-mode measured 2026-11-16: ramp-down 8 s (`zero`/`land`) vs 4.5–5 s (`--end-pulse stop`); axis polarity still to be checked before blades-on hover |
+| `dronectl bridge --arm-live` (`UDP 25000`, blades OFF) | Solid LED bind at 20 Hz; `bUp` spins motors; `FlagStop` + `throttle=0` stops motors after ~3–5 s controller ramp-down | Stop-mode measured 2026-11-16: ramp-down 8 s (`zero`/`land`) vs 4.5–5 s (`--end-pulse stop`); blades-on 2026-11-16: throttle `0.6`/`0.75` no lift-off, `0.9` for 1.5 s climbs ~1 m then falls straight; hover throttle lies in `0.75–0.9`; axis polarity in flight still unverified |
 | End-to-end Python TRT + `cv2` | `48` frames in `0.861 s` (`55.7 FPS` incl. JPEG decode + NMS) | `0` COCO detections > `0.35` on bench-facing frames |
 
 ## Conclusion and limitations
