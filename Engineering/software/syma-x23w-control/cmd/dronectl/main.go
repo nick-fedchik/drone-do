@@ -207,7 +207,9 @@ func runBridge(args []string, stdout, stderr io.Writer) int {
 	armLive := flags.Bool("arm-live", false, "explicitly enable live UDP 25000 flight packets (default: dry-run)")
 	watchdog := flags.Duration("watchdog", 500*time.Millisecond, "IPC watchdog timeout before sending FlagStop")
 	maxTilt := flags.Float64("max-tilt", 0.35, "max roll/pitch/yaw amplitude [0,1]")
-	stopMode := flags.String("stop-mode", "stop", "stop packet mode on timeout/zero throttle: stop|land|zero")
+	endPulse := flags.String("end-pulse", "none", "flag pulse sent for 1 s when flight stops: none|stop|land")
+	endPulseDur := flags.Duration("end-pulse-dur", time.Second, "duration of --end-pulse")
+	stopMode := flags.String("stop-mode", "zero", "idle packet mode on timeout/zero throttle: zero|stop|land; zero/land get a 0.5 s stop-flag arm pulse before flight")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
@@ -240,12 +242,14 @@ func runBridge(args []string, stdout, stderr io.Writer) int {
 	go func() { serveDone <- server.Serve(ctx) }()
 
 	bridgeErr := x23wcmd.RunBridge(ctx, server, x23wcmd.BridgeConfig{
-		TargetIP:   *target,
-		ArmLive:    *armLive,
-		Watchdog:   *watchdog,
-		MaxTilt:    *maxTilt,
-		SocketPath: path,
-		StopMode:   *stopMode,
+		TargetIP:    *target,
+		ArmLive:     *armLive,
+		Watchdog:    *watchdog,
+		MaxTilt:     *maxTilt,
+		SocketPath:  path,
+		StopMode:    *stopMode,
+		EndPulse:    *endPulse,
+		EndPulseDur: *endPulseDur,
 	})
 	stop()
 	serveErr := <-serveDone
@@ -338,6 +342,6 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  dronectl tui [--socket PATH]")
 	fmt.Fprintln(w, "  dronectl probe [--target IP] [--duration 2s]")
 	fmt.Fprintln(w, "  dronectl video [--target IP] [--duration 3s] [--out DIR]")
-	fmt.Fprintln(w, "  dronectl bridge [--socket PATH] [--target IP] [--arm-live] [--watchdog 500ms] [--max-tilt 0.35] [--stop-mode stop|land|zero]")
+	fmt.Fprintln(w, "  dronectl bridge [--socket PATH] [--target IP] [--arm-live] [--watchdog 500ms] [--max-tilt 0.35] [--stop-mode zero|stop|land] [--end-pulse none|stop|land]")
 	fmt.Fprintln(w, "status/send/tui use the local pseudo-emulator; bridge defaults to dry-run unless --arm-live is set.")
 }

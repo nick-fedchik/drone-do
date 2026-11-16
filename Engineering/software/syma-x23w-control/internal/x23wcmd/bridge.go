@@ -18,6 +18,12 @@ type BridgeConfig struct {
 	SendRateHz int
 	SocketPath string
 	StopMode   string
+	// ArmPulse is how long the 0x10 flag is sent on an idle→active transition
+	// when StopMode does not already hold it during idle.
+	ArmPulse time.Duration
+	// EndPulse is sent for EndPulseDur on an active→idle transition: stop|land|none.
+	EndPulse    string
+	EndPulseDur time.Duration
 }
 
 // RunBridge exposes the local Unix IPC server and translates incoming frames
@@ -66,6 +72,15 @@ func RunBridge(ctx context.Context, server *ipc.Server, cfg BridgeConfig) error 
 		_, _ = ctrlConn.WriteToUDP([]byte{'J', 'H', 'C', 'M', 'D', 0xd0, 0x01}, ctrlAddr)
 	}
 
+	if cfg.ArmPulse <= 0 {
+		cfg.ArmPulse = 500 * time.Millisecond
+	}
+	if cfg.EndPulseDur <= 0 {
+		cfg.EndPulseDur = time.Second
+	}
+	wasIdle := true
+	var armUntil, endUntil time.Time
+
 	tickPeriod := time.Second / time.Duration(cfg.SendRateHz)
 	ticker := time.NewTicker(tickPeriod)
 	defer ticker.Stop()
@@ -92,7 +107,25 @@ func RunBridge(ctx context.Context, server *ipc.Server, cfg BridgeConfig) error 
 				_, _ = ctrlConn.WriteToUDP([]byte{'J', 'H', 'C', 'M', 'D', 0xd0, 0x01}, ctrlAddr)
 			}
 		case <-ticker.C:
-			pkt, err := PacketFromSnapshot(server.Snapshot(), time.Now().UTC(), cfg.Watchdog, cfg.MaxTilt, cfg.StopMode)
+			now := time.Now().UTC()
+			snap := server.Snapshot()
+			idle := snapshotIdle(snap, now, cfg.Watchdog)
+			if wasIdle && !idle && cfg.StopMode != "stop" {
+				armUntil = now.Add(cfg.ArmPulse)
+			}
+			if !wasIdle && idle {
+				endUntil = now.Add(cfg.EndPulseDur)
+			}
+			wasIdle = idle
+			var pkt []byte
+			var err error
+			if ef := endPulseFlags(cfg.EndPulse); ef != 0 && idle && now.Before(endUntil) {
+				pkt, err = EncodeFlightFrame(control.Frame{At: now, Throttle: 0.0}, ef)
+			} else if now.Before(armUntil) {
+				pkt, err = EncodeFlightFrame(control.Frame{At: now, Throttle: 0.0}, FlagStop)
+			} else {
+				pkt, err = PacketFromSnapshot(snap, now, cfg.Watchdog, cfg.MaxTilt, cfg.StopMode)
+			}
 			if err != nil {
 				continue
 			}
@@ -101,6 +134,20 @@ func RunBridge(ctx context.Context, server *ipc.Server, cfg BridgeConfig) error 
 			}
 		}
 	}
+}
+
+func snapshotIdle(snap ipc.Snapshot, now time.Time, watchdog time.Duration) bool {
+	return snap.LastFrame == nil || snap.UpdatedAt == nil || now.Sub(*snap.UpdatedAt) > watchdog || snap.LastFrame.Throttle <= 0.001
+}
+
+func endPulseFlags(mode string) uint8 {
+	switch mode {
+	case "stop":
+		return FlagStop
+	case "land":
+		return FlagLand
+	}
+	return 0
 }
 
 func stopFlags(mode string) uint8 {
