@@ -169,6 +169,7 @@ def main() -> int:
     parser.add_argument("--frames", type=int, default=0, help="stop after N frames (0 = until Ctrl-C)")
     parser.add_argument("--hz", type=float, default=10.0, help="control loop rate in Hz")
     parser.add_argument("--status-file", default="", help="optional JSON status file updated every frame")
+    parser.add_argument("--track-log", default="", help="optional JSONL log: time, drone bbox, pad centre and control per frame")
     parser.add_argument("--preview-port", type=int, default=0, help="optional HTTP MJPEG preview port (e.g. 8081)")
     args = parser.parse_args()
 
@@ -204,6 +205,7 @@ def main() -> int:
         print(f"MJPEG preview ready at http://jetson:{args.preview_port}/stream.mjpg", flush=True)
 
     seq = 0
+    track_log = open(args.track_log, "a", encoding="utf-8", buffering=1) if args.track_log else None
     period = 1.0 / max(1.0, args.hz)
     tracker = FailSafeTracker(
         loss_timeout=args.loss_timeout,
@@ -240,6 +242,15 @@ def main() -> int:
             )
             seq += 1
             resp = send_ipc_command(sock, seq, ctrl)
+            if track_log is not None:
+                pad_c = pad_corners.reshape(-1, 2).mean(axis=0).tolist() if pad_corners is not None else None
+                track_log.write(json.dumps({
+                    "t": round(time.time(), 3),
+                    "pad_c": pad_c,
+                    "drone_bbox": drone_bbox,
+                    "drone_conf": drone_conf,
+                    "ctrl": ctrl,
+                }) + "\n")
             if args.status_file:
                 status_payload = {
                     "seq": seq,
