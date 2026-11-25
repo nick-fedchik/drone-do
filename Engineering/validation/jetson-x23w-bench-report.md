@@ -1,9 +1,9 @@
 # Report: Jetson J501 Wi-Fi, Syma X23W protocol, and TensorRT bench verification
 
 * **WP type:** Report / Experiment
-* **Version:** 0.1.0
-* **Date:** 2026-11-14
-* **Status:** Bench-verified for Jetson Wi-Fi, X23W video/query, and TensorRT inference; flight commands unverified
+* **Version:** 0.2.0
+* **Date:** 2026-11-25
+* **Status:** Bench-verified for Jetson Wi-Fi, X23W video/query, TensorRT inference, and open-loop flight command drift; platform identified as unsuitable for fine closed-loop precision control
 * **Related WI:** [#1](https://github.com/nick-fedchik/drone-do/issues/1), [#3](https://github.com/nick-fedchik/drone-do/issues/3)
 * **Source / baseline:** `Engineering/software/syma-x23w-control/` (`dronectl`), `Seeed-Studio/Linux_for_Tegra` (`r36.4.3`), `aircrack-ng/rtl8188eus`, `aivenlau/SyMaDemo_android`
 * **Author / reviewer:** Session bench verification (AORUS5 + `mfedchyk@jetson`); unreviewed
@@ -80,14 +80,24 @@ Profile: `throttle 0.9` × 0.5 s, then `0.82` × 3 s, constant `roll`; drone fac
 ## Conclusion and limitations
 
 1. **Jetson + Go + TensorRT pipeline is viable:** Jetson AGX Orin connects directly to `FPV_WIFI__140e` (`192.168.29.1`) over `TL-WN722N`, decodes live `640x480 @ 16 FPS` MJPEG in Go, and runs FP16 YOLOv8n inference at `55.7 FPS` end-to-end (>3x headroom over camera frame rate).
-2. **Flight control remains unverified:** `jh_wifi.cpp` indicates `IC_GPRTPB` flight commands use `0xA5 0x5A` framing on UDP `25000`, but this has **not** been tested on the aircraft (propellers remain installed).
+2. **Flight control verified on UDP 25000; trim unstable:** Live motor arming, flight command framing (`0xA5 0x5A` at 20 Hz), and open-loop flight tests were executed on 2026-11-16. Hover throttle is verified around `0.82–0.85`, but neutral trim fluctuates across flights.
 3. **JPEG validation gap:** `dronectl video` should validate full frames with `jpeg.Decode` rather than `jpeg.DecodeConfig` so truncated UDP-reassembled frames are dropped before inference.
 4. **Role of `Pico` and `kuzmin-machine` (PYNQ-Z1):**
    - `Pico SC0915` (`1209:3020`) is ready on AORUS5 for sniffing the physical RC transmitter or internal UART/SPI buses without spinning motors.
    - `kuzmin-machine` (KPOL / BRAM / CME on PYNQ-Z1, ~100 ns hardware pipeline) is **not** needed for `16 FPS` Wi-Fi flight/CV; keep it as a candidate only for later deterministic docking/charging safety interlocks.
+5. **Platform unsuitability for precision closed-loop control:** The Syma X23W platform exhibits fundamental hardware and protocol limitations that make it unsuitable for precise docking and fine maneuvering:
+   - *Virtual stick angles vs. velocity/position setpoints:* The Joyhonest Wi-Fi protocol sends raw stick deflections at 20 Hz (50 ms interval). The aircraft lacks onboard optical flow or position hold, so centering the stick merely levels the airframe while preserving lateral momentum (requiring active counter-tilt pulses).
+   - *Excessive closed-loop control latency (>200–300 ms):* Compound latency across onboard camera MJPEG encoding (~80–120 ms), Wi-Fi UDP transit (~30–50 ms), Jetson TensorRT inference/tracking (~5–10 ms), UDP command TX (~20–50 ms), and brushed motor mechanical response (~30–50 ms) exceeds the stability boundary for responsive visual servoing, causing hunting oscillations and overshoot.
+   - *Brushed DC motor non-linearity and asymmetry:* Coreless brushed motors exhibit large deadbands, non-linear thrust curves, and rapid brush wear. Uneven motor degradation produces volatile lateral drift where tiny trim changes (±0.03) invert drift direction entirely.
+   - *Lack of onboard position sensors & ground-effect instability:* Without downward ToF lidar or optical flow, the internal 6-axis gyro cannot compensate for drift, and ground-effect turbulence near landing surfaces (<20–30 cm) heavily destabilizes the craft.
+   - *Engineering recommendations:*
+     - Keep docking architecture reliant on wide-tolerance mechanical funnels / physical cones rather than millimeter-level flight commands (per `Research/problems/x23w-docking-sensing-hypotheses.md`).
+     - If software maneuvering is attempted on X23W, use discrete timed pulse maneuvers (bang-bang with counter-pulses) instead of continuous PID loops.
+     - For true autonomous precision docking and gate navigation, migrate to an airframe with onboard optical flow and velocity setpoints (e.g., Crazyflie 2.1 or a brushless micro-whoop running Betaflight/INAV/ArduPilot with ELRS/CRSF).
 
 ## History
 
 | Version | Date | Change |
 |---|---|---|
 | 0.1.0 | 2026-11-14 | Record Jetson J501 Wi-Fi driver build, live X23W `IC_GPRTPB` probe/video capture, and TensorRT YOLOv8n benchmark. |
+| 0.2.0 | 2026-11-25 | Record flight trim test results and add engineering analysis on Syma X23W platform unsuitability for fine closed-loop precision control. |
